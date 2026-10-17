@@ -23,13 +23,12 @@ import {
   Thermometer,
   X,
 } from "lucide-react";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Topbar } from "@/components/layout/Topbar";
+import { AppShell } from "@/components/layout/AppShell";
 import { AddPlantModal } from "@/components/plants/AddPlantModal";
 import { AIPredictionChart, SoilMoistureChart, WaterTankChart } from "@/components/dashboard/Charts";
 import { ModalFrame } from "@/components/shared/ModalFrame";
-import { SettingsPage } from "@/components/settings/SettingsPage";
-import { dashboardMetrics, notifications, plants as initialPlants, wateringEvents } from "@/lib/mock-data";
+import { dashboardMetrics, notifications, wateringEvents } from "@/lib/mock-data";
+import { usePlants } from "@/context/PlantsContext";
 import type { NotificationItem, Plant } from "@/lib/types";
 
 type DialogState = "add-plant" | "notifications" | "watering-events" | "reports" | "schedule" | "recommendation" | null;
@@ -41,7 +40,7 @@ function SummaryCards({ plants }: { plants: Plant[] }) {
     <section className="summary-grid" aria-label="Dashboard summary">
       <article className="summary-card">
         <span className="summary-icon green"><Sprout size={20} /></span>
-        <div className="summary-content"><span className="summary-label">Total Plants</span><strong>{plants.length}</strong><small><b>{healthyCount} Healthy</b><i /> <em>{plants.filter((plant) => plant.status === "Needs Water").length} Needs Attention</em></small></div>
+        <div className="summary-content"><span className="summary-label">Total Plants</span><strong>{plants.length}</strong><small><b>{healthyCount} Healthy</b><i /> <em>{plants.filter((plant) => ["Needs Water", "Too Wet", "Sensor Error"].includes(plant.status)).length} Needs Attention</em></small></div>
       </article>
       <article className="summary-card">
         <span className="summary-icon blue"><Droplet size={21} fill="currentColor" /></span>
@@ -63,12 +62,12 @@ function PlantCard({ plant }: { plant: Plant }) {
   return (
     <article className="plant-card">
       <div className="plant-heading">
-        <Image className="plant-image" src={plant.image} alt={`${plant.name} plant`} width={60} height={64} unoptimized />
+        {plant.image ? <Image className="plant-image" src={plant.image} alt={`${plant.name} plant`} width={60} height={64} unoptimized /> : <span className="plant-image plant-image-placeholder" aria-label="No plant photograph"><Leaf size={20} /></span>}
         <div className="plant-ident"><h3>{plant.name}</h3><span>{plant.category}</span><span className={`status-badge ${plant.status.toLowerCase().replace(" ", "-")}`}><i />{plant.status}</span></div>
       </div>
       <div className="plant-metrics">
-        <div><Droplet className="metric-blue" size={14} /><span>Soil Moisture</span><strong>{plant.moisture}%</strong></div>
-        <div><Thermometer className="metric-red" size={14} /><span>Temperature</span><strong>{plant.temperature}°C</strong></div>
+        <div><Droplet className="metric-blue" size={14} /><span>Soil Moisture</span><strong>{plant.moisture === null ? "Unavailable" : `${plant.moisture}%`}</strong></div>
+        <div><Thermometer className="metric-red" size={14} /><span>Temperature</span><strong>{plant.temperature === null ? "Unavailable" : `${plant.temperature}°C`}</strong></div>
         <div><Gauge className="metric-blue" size={14} /><span>Tank Level</span><strong>{plant.tankLevel}%</strong></div>
       </div>
       <div className="next-watering"><CalendarDays size={14} /><div><span>Next watering</span><strong>{plant.nextWatering}</strong></div></div>
@@ -162,27 +161,18 @@ function BarChartIcon() {
   return <span className="report-icon"><Gauge size={21} /></span>;
 }
 
-interface DashboardProps {
-  activePage: string;
-  onNavigate: (page: string) => void;
-}
-
-export function Dashboard({ activePage, onNavigate }: DashboardProps) {
+export function Dashboard() {
   const [search, setSearch] = useState("");
-  const [plants, setPlants] = useState(initialPlants);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const { plants, addPlant, isLoading: plantsLoading } = usePlants();
   const filteredPlants = useMemo(() => plants.filter((plant) => `${plant.name} ${plant.category} ${plant.status}`.toLowerCase().includes(search.trim().toLowerCase())), [plants, search]);
 
-  function addPlant(plant: Plant) {
-    setPlants((current) => [...current, plant]);
+  if (plantsLoading) {
+    return <AppShell search={search} onSearch={setSearch} onNotifications={() => setDialog("notifications")}><div className="dashboard-content"><div className="plant-loading" role="status">Loading saved plant data…</div></div></AppShell>;
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar activePage={activePage} onNavigate={onNavigate} />
-      <main className="main-column">
-        <Topbar search={search} onSearch={setSearch} onNotifications={() => setDialog("notifications")} />
-        {activePage === "Settings" ? <SettingsPage /> : activePage === "Dashboard" ? (
+    <AppShell search={search} onSearch={setSearch} onNotifications={() => setDialog("notifications")}>
           <div className="dashboard-content">
             <div className="page-heading"><div><p className="eyebrow">YOUR GARDEN AT A GLANCE</p><h1>Smart Plant Water Management System</h1><p className="page-subtitle">Healthy Plants <i /> Optimized Water <i /> Smarter Decisions</p></div><span className="demo-pill"><span /> DEMO DATA</span></div>
             <SummaryCards plants={plants} />
@@ -200,13 +190,7 @@ export function Dashboard({ activePage, onNavigate }: DashboardProps) {
             </div>
             <footer className="page-footnote"><Info size={12} /> All values shown are sample demonstration data and do not represent live sensor readings or validated model performance.</footer>
           </div>
-        ) : (
-          <div className="placeholder-page">
-            <span className="placeholder-icon"><Leaf size={25} /></span><p className="eyebrow">WATERX WORKSPACE</p><h1>{activePage}</h1><p>This section is not implemented in the frontend demo yet.</p><button className="button primary" onClick={() => onNavigate("Dashboard")}>Back to Dashboard <ArrowRight size={15} /></button>
-          </div>
-        )}
-      </main>
-      {dialog === "add-plant" ? <AddPlantModal onClose={() => setDialog(null)} onAdd={addPlant} /> : dialog ? <Dialog kind={dialog} plants={plants} onClose={() => setDialog(null)} /> : null}
-    </div>
+      {dialog === "add-plant" ? <AddPlantModal onClose={() => setDialog(null)} onSave={addPlant} /> : dialog ? <Dialog kind={dialog} plants={plants} onClose={() => setDialog(null)} /> : null}
+    </AppShell>
   );
 }
