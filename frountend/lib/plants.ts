@@ -25,7 +25,7 @@ export function getPlantStatus(plant: Plant, now: number): PlantStatus {
     plant.minMoisture >= plant.optimalMoisture || plant.optimalMoisture >= plant.maxMoisture) {
     return "Sensor Error";
   }
-  if (plant.readingSource === "sensor") {
+  if (plant.readingSource === "sensor" || plant.readingSource === "simulation") {
     const readingTime = plant.readingTimestamp ? new Date(plant.readingTimestamp).getTime() : Number.NaN;
     if (!Number.isFinite(readingTime) || readingTime > now || now - readingTime > 24 * 60 * 60 * 1000) {
       return "Sensor Error";
@@ -48,7 +48,7 @@ export function createPlant(configuration: PlantConfiguration): Plant {
     moisture: null,
     temperature: null,
     humidity: null,
-    tankLevel: 0,
+    tankLevel: null,
     nextWatering: configuration.wateringSchedule.trim() || "Not scheduled",
     status: "Sensor Error",
     threshold: configuration.minMoisture,
@@ -68,6 +68,7 @@ export function createPlant(configuration: PlantConfiguration): Plant {
     wateringHistory: [],
     growth: null,
     growthHistory: [],
+    predictions: [],
     isDemoData: false,
   };
   return { ...plant, status: getPlantStatus(plant, Date.now()) };
@@ -107,6 +108,20 @@ function isGrowthHistory(value: unknown): value is GrowthPoint[] {
   );
 }
 
+function isPredictionHistory(value: unknown): value is Plant["predictions"] {
+  return Array.isArray(value) && value.every((prediction) =>
+    isRecord(prediction) &&
+    typeof prediction.madeAt === "string" &&
+    typeof prediction.targetTime === "string" &&
+    typeof prediction.predictedMoisture === "number" &&
+    Number.isFinite(prediction.predictedMoisture) &&
+    (prediction.actualMoisture === null ||
+      (typeof prediction.actualMoisture === "number" && Number.isFinite(prediction.actualMoisture))) &&
+    typeof prediction.modelName === "string" &&
+    typeof prediction.algorithm === "string"
+  );
+}
+
 export function isPlant(value: unknown): value is Plant {
   if (!isRecord(value)) return false;
   const optionalReading = (reading: unknown) => reading === null || (typeof reading === "number" && Number.isFinite(reading));
@@ -115,15 +130,16 @@ export function isPlant(value: unknown): value is Plant {
     (typeof value.image === "string" || value.image === null) &&
     optionalReading(value.moisture) && optionalReading(value.temperature) && optionalReading(value.humidity) &&
     typeof value.active === "boolean" &&
-    (value.readingSource === "sensor" || value.readingSource === "demo" || value.readingSource === "unavailable") &&
+    (value.readingSource === "sensor" || value.readingSource === "simulation" || value.readingSource === "demo" || value.readingSource === "unavailable") &&
     (typeof value.readingTimestamp === "string" || value.readingTimestamp === null) &&
     ["minMoisture", "optimalMoisture", "maxMoisture", "waterVolumeMl", "maxCyclesPerDay", "maxPumpRuntimeSeconds"].every(
       (key) => typeof value[key] === "number" && Number.isFinite(value[key])
     ) &&
     typeof value.wateringSchedule === "string" && typeof value.nextWatering === "string" &&
-    typeof value.threshold === "number" && typeof value.tankLevel === "number" &&
+    typeof value.threshold === "number" && optionalReading(value.tankLevel) &&
     (typeof value.lastWateredAt === "string" || value.lastWateredAt === null) &&
     isMoistureHistory(value.moistureHistory) && isWateringHistory(value.wateringHistory) && isGrowthHistory(value.growthHistory) &&
+    (value.predictions === undefined || isPredictionHistory(value.predictions)) &&
     (value.growth === null || isRecord(value.growth)) && typeof value.isDemoData === "boolean" &&
     (value.status === "Healthy" || value.status === "Needs Water" || value.status === "Too Wet" || value.status === "Sensor Error" || value.status === "Inactive");
 }
@@ -131,7 +147,13 @@ export function isPlant(value: unknown): value is Plant {
 export function readPlants(value: unknown): Plant[] | null {
   if (!Array.isArray(value)) return null;
   const normalized = value.map((plant) =>
-    isRecord(plant) && plant.growthHistory === undefined ? { ...plant, growthHistory: [] } : plant
+    isRecord(plant)
+      ? {
+          predictions: [],
+          growthHistory: [],
+          ...plant,
+        }
+      : plant
   );
   if (!normalized.every(isPlant)) return null;
   return normalized.map(withCurrentStatus);
@@ -142,6 +164,7 @@ export function statusClass(status: PlantStatus): string {
 }
 
 export function readingSourceLabel(source: ReadingSource): string {
+  if (source === "simulation") return "Simulated reading";
   if (source === "demo") return "Demonstration reading";
   if (source === "sensor") return "Sensor reading";
   return "No sensor reading";

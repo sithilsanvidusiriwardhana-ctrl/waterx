@@ -1,9 +1,18 @@
 \contentsline {section}{\numberline {1}Introduction}{1}{section.1}%
-\contentsline {section}{\numberline {2}Functional Requirements}{1}{section.2}%
-\contentsline {section}{\numberline {3}Non-Functional Requirements}{2}{section.3}%
-\contentsline {section}{\numberline {4}Database Design}{3}{section.4}%
-\contentsline {subsection}{\numberline {4.1}Overview}{3}{subsection.4.1}%
-\contentsline {subsection}{\numberline {4.2}ER Diagram}{3}{subsection.4.2}%
-\contentsline {subsection}{\numberline {4.3}Relationships}{3}{subsection.4.3}%
-\contentsline {subsection}{\numberline {4.4}Data Dictionary}{3}{subsection.4.4}%
-\contentsline {subsection}{\numberline {4.5}Indexes and Views}{9}{subsection.4.5}%
+\contentsline {section}{\numberline {2}Project Implementation}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Architecture and Features}{2}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Frontend Dashboard}{2}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}Dashboard overview}{2}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}Plant management and detail screens}{3}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}Settings, persistence and demonstration data}{3}{subsubsection.2.2.3}%
+\contentsline {subsubsection}{\numberline {2.2.4}Navigation scope}{3}{subsubsection.2.2.4}%
+\contentsline {subsection}{\numberline {2.3}Simulation Behavior}{3}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Running the Project Manually}{4}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Functional Requirements}{4}{section.3}%
+\contentsline {section}{\numberline {4}Non-Functional Requirements}{5}{section.4}%
+\contentsline {section}{\numberline {5}Database Design}{6}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Overview}{6}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}ER Diagram}{6}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Relationships}{7}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Data Dictionary}{7}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Indexes and Views}{11}{subsection.5.5}%

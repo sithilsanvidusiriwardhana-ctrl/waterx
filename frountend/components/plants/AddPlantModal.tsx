@@ -8,7 +8,7 @@ import type { Plant } from "@/lib/types";
 
 interface AddPlantModalProps {
   onClose: () => void;
-  onSave: (plant: Plant) => void;
+  onSave: (plant: Plant) => Promise<void>;
   plant?: Plant;
 }
 
@@ -39,31 +39,39 @@ export function AddPlantModal({ onClose, onSave, plant }: AddPlantModalProps) {
     wateringSchedule: plant.wateringSchedule,
   } : defaultConfiguration);
   const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   function update<K extends keyof PlantConfiguration>(key: K, value: PlantConfiguration[K]) {
     setValues((current) => ({ ...current, [key]: value }));
     setError("");
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (values.minMoisture >= values.optimalMoisture || values.optimalMoisture >= values.maxMoisture) {
       setError("Moisture thresholds must be ordered: minimum < optimal < maximum.");
       return;
     }
     const configuration = { ...values, image: values.image?.trim() || null };
-    if (plant) {
-      onSave({
-        ...plant,
-        ...configuration,
-        category: configuration.species,
-        threshold: configuration.minMoisture,
-        nextWatering: configuration.wateringSchedule.trim() || "Not scheduled",
-      });
-    } else {
-      onSave(createPlant(configuration));
+    setIsSaving(true);
+    try {
+      if (plant) {
+        await onSave({
+          ...plant,
+          ...configuration,
+          category: configuration.species,
+          threshold: configuration.minMoisture,
+          nextWatering: configuration.wateringSchedule.trim() || "Not scheduled",
+        });
+      } else {
+        await onSave(createPlant(configuration));
+      }
+      onClose();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Plant changes could not be saved.");
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   }
 
   return (
@@ -80,7 +88,7 @@ export function AddPlantModal({ onClose, onSave, plant }: AddPlantModalProps) {
           <label className="form-field">Plant species
             <input required maxLength={80} value={values.species} onChange={(event) => update("species", event.target.value)} placeholder="e.g. Spathiphyllum wallisii" />
           </label>
-          <label className="form-field plant-form-wide">Image URL <span className="form-optional">Optional</span>
+          <label className="form-field plant-form-wide">Image URL <span className="form-optional">Not saved by the backend</span>
             <input type="url" value={values.image ?? ""} onChange={(event) => update("image", event.target.value)} placeholder="https://example.com/plant.jpg" />
           </label>
           <label className="form-field">Minimum moisture
@@ -101,13 +109,13 @@ export function AddPlantModal({ onClose, onSave, plant }: AddPlantModalProps) {
           <label className="form-field">Maximum pump runtime
             <span className="input-with-suffix"><input type="number" min="1" max="600" step="1" required value={values.maxPumpRuntimeSeconds} onChange={(event) => update("maxPumpRuntimeSeconds", Number(event.target.value))} /><span>sec</span></span>
           </label>
-          <label className="form-field plant-form-wide">Watering schedule <span className="form-optional">Optional</span>
-            <input maxLength={100} value={values.wateringSchedule} onChange={(event) => update("wateringSchedule", event.target.value)} placeholder="e.g. Every 3 days at 8:00 AM" />
+          <label className="form-field plant-form-wide">Daily watering time <span className="form-optional">Optional</span>
+            <input type="time" value={values.wateringSchedule} onChange={(event) => update("wateringSchedule", event.target.value)} />
           </label>
         </div>
-        <p className="form-note">These are starter values only. Set moisture and watering limits for this plant’s species and growing conditions. New plants start without sensor readings.</p>
+        <p className="form-note">These are starter values only. Set moisture and watering limits for this plant’s species and growing conditions. The backend stores a daily schedule time only. New plants start without sensor readings.</p>
         {error && <p className="settings-error" role="alert">{error}</p>}
-        <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button type="submit" className="button primary">{plant ? "Save changes" : "Add plant"}</button></div>
+        <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose} disabled={isSaving}>Cancel</button><button type="submit" className="button primary" disabled={isSaving}>{isSaving ? "Saving…" : plant ? "Save changes" : "Add plant"}</button></div>
       </form>
     </ModalFrame>
   );

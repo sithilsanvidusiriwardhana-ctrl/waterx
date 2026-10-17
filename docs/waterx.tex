@@ -9,6 +9,7 @@
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage{xltabular}
+\usepackage{graphicx}
 \usepackage{needspace}
 \usepackage{enumitem}
 \usepackage{xcolor}
@@ -53,7 +54,7 @@
      node[pos=0.8, above, font=\scriptsize] {#5};}
 
 \title{waterX: Smart Plant Water Management System\\[2pt]
-       \large Requirements and Database Design}
+       \large Project Report, Requirements and Database Design}
 \author{}
 \date{\today}
 
@@ -64,47 +65,219 @@
 
 % =====================================================================
 \section{Introduction}
-waterX is a software-simulated smart irrigation system. It monitors plant
-conditions, decides when to water using schedules, soil moisture, tank level
-and safety rules, and uses machine learning to predict future soil moisture.
+waterX is a smart plant-water-management project with two related but
+currently separate parts: a browser-based demonstration dashboard and a
+Python/SQLite simulation backend. The simulator generates weather and soil
+conditions, applies watering strategies and safety limits, and stores run data.
+The dashboard demonstrates plant management and monitoring screens using
+sample data stored in the browser; it is not connected to the simulator
+database or to physical sensors.
 
 \textbf{Research question.} Can AI-assisted watering reduce water consumption
 compared with fixed-schedule watering without negatively affecting plant
 growth?
 
-This document lists the functional and non-functional requirements and
-describes the SQLite database design. Priorities use the MoSCoW scale
-(\emph{Must}, \emph{Should}, \emph{Could}).
+This report describes the project structure, implemented behavior, known
+limitations, requirements and SQLite database design. The simulator's
+AI-assisted strategy currently uses a physics-based moisture forecast; a
+trained machine-learning model and a measured strategy-comparison study have
+not been implemented. Requirements use the MoSCoW priority scale
+(\emph{Must}, \emph{Should}, \emph{Could}); implementation status is shown
+separately.
+
+% =====================================================================
+\section{Project Implementation}
+
+\subsection{Architecture and Features}
+The project is organized into a Next.js frontend, a Python simulation engine
+and a SQLite database. The two applications are not wired together: browser
+plant and preference data is saved in \cn{localStorage}, while simulator and
+seed data is saved in \cn{database/waterx.db}.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}l Y Y@{}}
+  \toprule
+  \textbf{Project area} & \textbf{Implemented features} & \textbf{Important boundary}\\
+  \midrule
+  Frontend & Responsive dashboard with plant-status cards, sample moisture and tank charts, sample predictions, alerts, recent watering events and quick-action dialogs. & Dashboard metrics, charts, alerts, events and recommendations are explicitly demonstration data; they are not live simulator output.\\
+  Plant management & Add, edit, search, sort, filter, deactivate, reactivate and delete plants. Plant details include moisture history, watering history, growth, prediction and care settings panels. & Changes persist in this browser's \cn{localStorage}; new plants have no sensor readings.\\
+  Preferences & Change the displayed profile name and light/dark appearance; reset preferences to defaults. & Preferences are local to the browser and are not user-account settings.\\
+  Simulator & Hourly weather and moisture simulation; fixed-schedule, threshold-based and forecast-based watering; noisy/faulty sensor readings; tank, daily-cycle and pump-runtime safeguards; alerts and simulated growth. & The forecast is a deterministic physics-based heuristic, not a trained ML model.\\
+  Database & SQLite schema, repeatable demonstration seed data, foreign-key enforcement, integrity constraints, indexes and a daily-water-usage view. & The frontend does not currently read from or write to this database.\\
+  Tests & Python unit tests exercise database setup, seed repeatability, all watering strategies, data persistence, sensor/tank/pump safeguards and seeded reproducibility. & These tests do not establish frontend/backend integration or model accuracy.\\
+  \bottomrule
+\end{tabularx}
+\caption{Implemented project components and their current boundaries.}
+\end{table}
+
+\subsection{Frontend Dashboard}
+The frontend is a client-side Next.js application built with React and
+TypeScript. Recharts supplies the dashboard charts, and Lucide React supplies
+the interface icons. Its visual design combines a dark-blue navigation
+sidebar, a top search/profile bar, a light dashboard canvas and separate
+white metric and content cards. The layout reorganizes for narrower screens.
+Figure~\ref{fig:dashboard} shows the dashboard design included in the project.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]
+    {\detokenize{Smart Plant Water Management Dashboard.png}}
+  \caption{waterX frontend dashboard design. The cards, charts, notifications
+  and recommendations are sample demonstration content, not live readings.}
+  \label{fig:dashboard}
+\end{figure}
+
+\subsubsection{Dashboard overview}
+The home route \cn{/} is the main monitoring screen. It presents four summary
+cards for plant count and health, tank level, weekly water use and displayed
+prediction accuracy. Below these cards, the plant-status section shows each
+plant's category, moisture, temperature, tank level, status and next-watering
+text. The right-hand activity column groups alerts and notifications, recent
+watering events and quick actions. The dashboard also contains soil-moisture
+trend lines with a period selector, a circular tank-level chart, a six-hour
+observed-versus-predicted moisture chart, and a recommendation panel.
+
+The top bar provides plant search, a notification button and the saved display
+name. The Add Plant quick action opens a form. Other dashboard actions open
+dialogs for notifications, watering history, reports, schedules or the
+recommendation. The report dialog summarizes sample values; schedule editing
+and database-backed reporting are not implemented.
+
+\subsubsection{Plant management and detail screens}
+The \cn{/plants} route is the plant library. Its summary cards show total and
+active plants, healthy plants, plants needing attention and average available
+moisture. The library supports searching by plant name, species, category or
+ID, filtering by status, and sorting by name, moisture or last-watered time.
+Plant cards expose view, edit, deactivate/reactivate and delete actions. Add
+and edit forms configure name, species, optional image URL, minimum/optimal/
+maximum moisture, water amount, daily cycle limit, maximum pump runtime and
+schedule text. Validation enforces ordered moisture thresholds. The
+confirmation dialogs explain the effect of deactivation and deletion.
+
+Each \cn{/plants/<plantId>} detail screen shows an overview and configured
+care information, a selectable 24-hour/7-day/30-day moisture-history chart
+with threshold references, watering history, growth measurements and a
+demonstration moisture outlook. Its plant-specific settings form can update
+care values. Empty and unavailable states are shown when readings or growth
+records do not exist. A newly created plant intentionally starts without a
+sensor reading, so it is marked as having a sensor error until readings
+become available.
+
+\subsubsection{Settings, persistence and demonstration data}
+The \cn{/settings} route allows the user to change the displayed name, select
+light or dark appearance, and restore preference defaults. Plant records and
+settings are persisted separately in browser \cn{localStorage}; they belong
+to that browser profile, not to a server-side account. Invalid saved plant
+data and storage write failures are surfaced in the interface.
+
+The dashboard starts with sample plants and prewritten chart, alert,
+watering-event and recommendation data. Demo labels and explanatory notes
+identify sample values; in particular, the accuracy percentage and moisture
+prediction are illustrative and are not measured model results. The frontend
+does not yet consume the simulator's SQLite records or connect to real
+sensors, a pump, or a backend API.
+
+\subsubsection{Navigation scope}
+The sidebar includes Dashboard, My Plants, Sensor Data, Watering Schedule,
+AI Predictions, Growth Monitoring, Reports and Settings. Dashboard, My Plants
+and Settings have working routes; plant details are available from My Plants.
+The other sidebar sections currently display a placeholder explaining that
+the section is not implemented. Likewise, schedule editing, database-backed
+reports and CSV export are not part of the current frontend.
+
+\subsection{Simulation Behavior}
+The Python engine advances one hour at a time. Weather and sensor randomness
+are controlled by the configured seed. Plant moisture changes with simulated
+temperature, humidity, sunlight, rain and plant uptake. The strategies are:
+\begin{itemize}
+  \item \cn{fixed\_schedule}: water when the configured schedule time is reached
+        (08:00 is used when a profile has no schedule).
+  \item \cn{rule\_based}: water when a valid sensor reading falls below the
+        profile's minimum moisture.
+  \item \cn{ai\_assisted}: estimate future moisture from the latest valid
+        reading and current conditions, then water if the estimate is below
+        the minimum. This is a physics-based heuristic forecast.
+\end{itemize}
+Faulty or missing sensor readings block watering. The engine also enforces
+the daily cycle limit, limits delivered water by the profile's maximum pump
+time and available tank level, and writes alerts when applicable. Runs store
+weather, readings, watering events, tank levels, predictions for
+\cn{ai\_assisted} runs, and periodic simulated growth records.
+
+\subsection{Running the Project Manually}
+Run Python commands from the repository root. Python 3.11 or later is the
+intended environment; the backend uses the Python standard library. Install
+Node.js and npm to run the frontend.
+\begin{verbatim}
+python -m database.waterx_db
+python -m database.seed
+python -m simulator --strategy ai_assisted --hours 72 --seed 42
+python -m unittest discover -s tests -v
+\end{verbatim}
+The first command initializes the default SQLite database, the second inserts
+repeatable demonstration data, and the third runs a simulation using the
+seeded plants. The simulator also accepts \cn{fixed\_schedule} and
+\cn{rule\_based}; \cn{python -m simulator --help} lists its options. To use
+another database file, pass a \cn{--database} path to the seed or simulator
+command.
+
+The frontend is in the directory named \cn{frountend}. From that directory,
+install its Node.js dependencies and start the development server:
+\begin{verbatim}
+npm install
+npm run dev
+\end{verbatim}
+Open \cn{http://localhost:3000} in a browser. The frontend scripts are defined
+in \cn{frountend/package.json}; \cn{npm run build} creates a production build
+and \cn{npm run lint} runs ESLint.
+
+To compile this report manually, run the following command twice from the
+\cn{docs} directory so the table of contents is updated:
+\begin{verbatim}
+pdflatex -output-directory=build waterx.tex
+\end{verbatim}
+The output PDF is \cn{docs/build/waterx.pdf}.
 
 % =====================================================================
 \section{Functional Requirements}
-\begin{xltabular}{\textwidth}{@{}l Y l@{}}
+\begin{xltabular}{\textwidth}{@{}l Y l l@{}}
   \toprule
-  \textbf{ID} & \textbf{Requirement} & \textbf{Priority}\\
+  \textbf{ID} & \textbf{Requirement} & \textbf{Priority} & \textbf{Status}\\
   \midrule
   \endhead
-  FR-01 & The user can add, edit and deactivate plants and assign each plant a plant profile. & Must\\
-  FR-02 & The user can configure each profile's watering settings: minimum, maximum and optimal moisture, water per cycle, maximum cycles per day, maximum pump run time and an optional fixed schedule time. & Must\\
-  FR-03 & The simulator generates hourly weather (temperature, humidity, sunlight, rain) and soil moisture per plant, modelling evaporation, plant uptake, watering and rain. & Must\\
-  FR-04 & The simulator adds sensor noise and faults (dropouts, spikes) and flags faulty readings. & Should\\
-  FR-05 & The fixed-schedule strategy waters a set amount at a set time every day (baseline for the experiment). & Must\\
-  FR-06 & The rule-based strategy waters a plant when its moisture falls below the profile threshold. & Must\\
-  FR-07 & Safety rules override every strategy: no watering when the tank is empty or the sensor is faulty, and limits on pump run time and waterings per day. & Must\\
-  FR-08 & The AI-assisted strategy uses predicted moisture to water before moisture drops below the threshold. & Must\\
-  FR-09 & The system stores every sensor reading, weather record, watering event and tank level in the database, linked to a simulation run. & Must\\
-  FR-10 & The system raises alerts (low tank, too dry, too wet, sensor fault, pump limit, predicted dry) with a severity level. & Should\\
-  FR-11 & The system trains and evaluates moisture-prediction models using a time-based split, reports MAE and RMSE, compares them with a naive baseline, and stores model details and predictions. & Must\\
-  FR-12 & The system records plant growth (height, leaf count, biomass, stress level) and compares it with watering history. & Should\\
-  FR-13 & The dashboard shows plant status, moisture charts, tank level, water consumption and alerts. & Must\\
-  FR-14 & The dashboard lets the user choose the strategy, random seed and simulation speed. & Should\\
-  FR-15 & Reports show water use per day, plant and run, and compare the three strategies on water used, time in stress and final growth. & Must\\
-  FR-16 & The user can export report data as CSV. & Could\\
+  FR-01 & The user can add, edit and deactivate plants and assign each plant a plant profile. & Must & Partial\\
+  FR-02 & The user can configure each profile's watering settings: minimum, maximum and optimal moisture, water per cycle, maximum cycles per day, maximum pump run time and an optional fixed schedule time. & Must & Partial\\
+  FR-03 & The simulator generates hourly weather (temperature, humidity, sunlight, rain) and soil moisture per plant, modelling evaporation, plant uptake, watering and rain. & Must & Implemented\\
+  FR-04 & The simulator adds sensor noise and faults (dropouts, spikes) and flags faulty readings. & Should & Implemented\\
+  FR-05 & The fixed-schedule strategy waters a set amount at a set time every day (baseline for the experiment). & Must & Implemented\\
+  FR-06 & The rule-based strategy waters a plant when its moisture falls below the profile threshold. & Must & Implemented\\
+  FR-07 & Safety rules override every strategy: no watering when the tank is empty or the sensor is faulty, and limits on pump run time and waterings per day. & Must & Implemented\\
+  FR-08 & The AI-assisted strategy uses predicted moisture to water before moisture drops below the threshold. & Must & Partial\\
+  FR-09 & The system stores every sensor reading, weather record, watering event and tank level in the database, linked to a simulation run. & Must & Implemented\\
+  FR-10 & The system raises alerts (low tank, too dry, too wet, sensor fault, pump limit, predicted dry) with a severity level. & Should & Partial\\
+  FR-11 & The system trains and evaluates moisture-prediction models using a time-based split, reports MAE and RMSE, compares them with a naive baseline, and stores model details and predictions. & Must & Partial\\
+  FR-12 & The system records plant growth (height, leaf count, biomass, stress level) and compares it with watering history. & Should & Partial\\
+  FR-13 & The dashboard shows plant status, moisture charts, tank level, water consumption and alerts. & Must & Partial\\
+  FR-14 & The dashboard lets the user choose the strategy, random seed and simulation speed. & Should & Partial\\
+  FR-15 & Reports show water use per day, plant and run, and compare the three strategies on water used, time in stress and final growth. & Must & Partial\\
+  FR-16 & The user can export report data as CSV. & Could & Planned\\
   \bottomrule
 \end{xltabular}
+Here, \emph{Implemented} means present in the Python simulation/database code.
+\emph{Partial} means some behavior exists, but the full requirement is not
+delivered or is demo-only. \emph{Planned} means no implementation is present.
+In particular, the browser dashboard and Python simulation currently operate
+independently.
 
 % =====================================================================
 \section{Non-Functional Requirements}
-Numeric targets are proposed values and can be adjusted.
+These are proposed requirements, not benchmark results or a compatibility
+certification. Performance, scalability, and model-accuracy targets have not
+been measured. The maintainability and hardware-portability statements
+describe design goals; the current project has no separate ML module and no
+physical sensor or pump integration.
 
 \begin{xltabular}{\textwidth}{@{}l l Y@{}}
   \toprule
@@ -268,12 +441,12 @@ resolved through the log tables (\cn{sensor\_readings}, \cn{watering\_events},
   created\_at & TEXT & NOT NULL, default now & Row creation time\\
 }
 
-\dbtable{ml\_models}{A trained prediction model and its accuracy.}{
+\dbtable{ml\_models}{Metadata for a prediction method or model; trained-model metrics are optional.}{
   model\_id & INTEGER & PK, autoincrement & Unique model id\\
   name & TEXT & NOT NULL & Model name, such as \cn{random\_forest\_v1}\\
   algorithm & TEXT & NOT NULL & Algorithm used\\
   horizon\_hours & INTEGER & NOT NULL & How many hours ahead it predicts\\
-  features & TEXT & NOT NULL & JSON list of feature names\\
+  features & TEXT & NOT NULL & Description or list of input feature names\\
   train\_start, train\_end & TEXT & nullable & Training period\\
   mae, rmse & REAL & nullable & Test-set error metrics\\
   file\_path & TEXT & nullable & Saved model file\\
@@ -366,7 +539,8 @@ Time-series queries filter by run, plant and time, so these indexes exist:
   \item \cn{predictions(run\_id, plant\_id, target\_time)}
   \item \cn{alerts(run\_id, timestamp)}
 \end{itemize}
-The view \cn{daily\_water\_usage} sums waterings and water use per run, plant
-and day. It feeds the reports and the strategy comparison.
+The view \cn{daily\_water\_usage} sums watering-event counts and water use per
+run, plant and day. It is available for future reports; the frontend does not
+currently query it or provide a strategy-comparison report.
 
 \end{document}

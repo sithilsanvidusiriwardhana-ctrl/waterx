@@ -9,7 +9,7 @@ import { ModalFrame } from "@/components/shared/ModalFrame";
 type ToastState = { type: "success" | "error"; message: string } | null;
 
 export function SettingsPage() {
-  const { settings, updateDisplayName, updateTheme, resetSettings } = useSettings();
+  const { settings, storageError, updateDisplayName, updateTheme, resetSettings } = useSettings();
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const name = nameDraft ?? settings.displayName;
   const [nameError, setNameError] = useState("");
@@ -28,10 +28,13 @@ export function SettingsPage() {
       setToast({ type: "error", message: "Display name is too long." });
       return;
     }
-    updateDisplayName(trimmedName);
+    const persisted = updateDisplayName(trimmedName);
     setNameDraft(trimmedName);
     setNameError("");
-    setToast({ type: "success", message: "Display name updated." });
+    setToast({
+      type: persisted ? "success" : "error",
+      message: persisted ? "Display name updated." : "Display name updated for this session only; browser storage failed.",
+    });
   }
 
   function cancelName() {
@@ -40,16 +43,26 @@ export function SettingsPage() {
   }
 
   function chooseTheme(theme: Theme) {
-    updateTheme(theme);
-    setToast({ type: "success", message: `${theme === "dark" ? "Dark" : "Light"} mode enabled.` });
+    const persisted = updateTheme(theme);
+    setToast({
+      type: persisted ? "success" : "error",
+      message: persisted
+        ? `${theme === "dark" ? "Dark" : "Light"} mode enabled.`
+        : `${theme === "dark" ? "Dark" : "Light"} mode is active for this session only; browser storage failed.`,
+    });
   }
 
   function confirmDefaults() {
-    resetSettings();
+    const persisted = resetSettings();
     setNameDraft(null);
     setNameError("");
     setConfirmReset(false);
-    setToast({ type: "success", message: "Settings restored to defaults." });
+    setToast({
+      type: persisted ? "success" : "error",
+      message: persisted
+        ? "Settings restored to defaults."
+        : "Defaults are active for this session only; browser storage failed.",
+    });
   }
 
   return (
@@ -61,10 +74,11 @@ export function SettingsPage() {
           <p className="page-subtitle">Manage your profile and dashboard preferences.</p>
         </div>
       </div>
+      {storageError && <div className="storage-warning" role="alert">{storageError}</div>}
 
       <div className="settings-layout">
         <section className="panel settings-card" aria-labelledby="profile-title">
-          <div className="settings-card-heading"><span className="settings-avatar" aria-hidden="true">{settings.displayName.charAt(0).toUpperCase()}</span><div><h2 id="profile-title">Profile Settings</h2><p>Update the name shown across your dashboard.</p></div></div>
+          <div className="settings-card-heading"><span className="settings-avatar" aria-hidden="true">{settings.displayName.charAt(0).toUpperCase()}</span><div><h2 id="profile-title">Profile Settings</h2><p>Update the name shown across your dashboard. Saved in this browser only.</p></div></div>
           <div className="settings-current"><span>Current display name</span><strong>{settings.displayName}</strong></div>
           <label className="settings-field" htmlFor="display-name">Display name</label>
           <input
@@ -82,7 +96,7 @@ export function SettingsPage() {
         </section>
 
         <section className="panel settings-card" aria-labelledby="appearance-title">
-          <div className="settings-card-heading"><span className="settings-section-icon"><Sun size={18} /></span><div><h2 id="appearance-title">Appearance</h2><p>Choose how waterX looks across your dashboard.</p></div></div>
+          <div className="settings-card-heading"><span className="settings-section-icon"><Sun size={18} /></span><div><h2 id="appearance-title">Appearance</h2><p>Choose how waterX looks across your dashboard. Saved in this browser only.</p></div></div>
           <div className="theme-options" role="group" aria-label="Dashboard theme">
             <button className={`theme-option ${settings.theme === "light" ? "selected" : ""}`} aria-pressed={settings.theme === "light"} onClick={() => chooseTheme("light")}>
               <span className="theme-preview light-preview"><Sun size={19} /></span><span className="theme-option-copy"><strong>Light Mode</strong><small>Bright and clear</small></span><span className="theme-radio" aria-hidden="true" />
