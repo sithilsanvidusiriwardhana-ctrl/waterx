@@ -52,9 +52,8 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
         ))}
       </nav>
       <div className="sidebar-footer">
-        <div className="online-line"><span className="online-dot" />System Online</div>
-        <p>Apr 27, 2025 · 10:24 AM</p>
-        <span className="demo-label"><BellRing size={12} /> Demonstration mode</span>
+        <div className="online-line"><span className="hardware-unavailable-dot" />No hardware connected</div>
+        <span className="demo-label"><BellRing size={12} /> Simulation records</span>
       </div>
     </aside>
   );

@@ -1,5 +1,5 @@
 export type PlantStatus = "Healthy" | "Needs Water" | "Too Wet" | "Sensor Error" | "Inactive";
-export type ReadingSource = "sensor" | "demo" | "unavailable";
+export type ReadingSource = "sensor" | "simulation" | "demo" | "unavailable";
 
 export interface MoisturePoint {
   recordedAt: string;
@@ -23,6 +23,15 @@ export interface PlantGrowth {
   stressStatus?: string;
 }
 
+export interface PlantPrediction {
+  madeAt: string;
+  targetTime: string;
+  predictedMoisture: number;
+  actualMoisture: number | null;
+  modelName: string;
+  algorithm: string;
+}
+
 export interface GrowthPoint {
   recordedAt: string;
   heightCm?: number;
@@ -38,7 +47,7 @@ export interface Plant {
   moisture: number | null;
   temperature: number | null;
   humidity: number | null;
-  tankLevel: number;
+  tankLevel: number | null;
   nextWatering: string;
   status: PlantStatus;
   threshold: number;
@@ -58,15 +67,13 @@ export interface Plant {
   wateringHistory: PlantWateringEvent[];
   growth: PlantGrowth | null;
   growthHistory: GrowthPoint[];
+  predictions: PlantPrediction[];
   isDemoData: boolean;
 }
 
 export interface MoistureReading {
   day: string;
-  basil: number;
-  tomato: number;
-  spiderPlant: number;
-  succulent: number;
+  values: Record<string, number>;
 }
 
 export interface NotificationItem {

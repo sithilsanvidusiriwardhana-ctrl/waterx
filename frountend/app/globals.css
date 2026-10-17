@@ -34,6 +34,7 @@ button { cursor: pointer; }
 .sidebar-footer { margin-top: auto; border-top: 1px solid #ffffff12; padding: 15px 6px 0; color: #b4c3d5; font-size: 10px; }
 .online-line { display: flex; align-items: center; gap: 9px; color: #d7e5ef; font-size: 11px; }
 .online-dot, .demo-pill > span { width: 8px; height: 8px; display: inline-block; border-radius: 50%; background: #31c681; box-shadow: 0 0 0 3px #31c68120; }
+.hardware-unavailable-dot { width: 8px; height: 8px; display: inline-block; flex: 0 0 8px; border-radius: 50%; background: #f0ad4e; }
 .sidebar-footer p { padding-left: 17px; margin: 5px 0 12px; font-size: 9px; color: #9bacc0; }
 .demo-label { color: #93a7bd; display: flex; align-items: center; gap: 6px; font-size: 9px; }
 

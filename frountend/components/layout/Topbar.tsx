@@ -1,7 +1,6 @@
 "use client";
 
 import { Bell, Search } from "lucide-react";
-import { notifications } from "@/lib/mock-data";
 import { useSettings } from "@/context/SettingsContext";
 
 interface TopbarProps {
@@ -29,7 +28,6 @@ export function Topbar({ search, onSearch, onNotifications, showSearch = true }:
       <div className="topbar-user">
         <button className="icon-button notification-button" onClick={onNotifications} aria-label="Open notifications">
           <Bell size={19} />
-          <span className="notification-count">{notifications.length}</span>
         </button>
         <div className="avatar" aria-hidden="true">{settings.displayName.charAt(0).toUpperCase()}</div>
         <div className="user-copy"><strong>{settings.displayName}</strong><span>Plant Enthusiast</span></div>

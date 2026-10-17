@@ -5,9 +5,10 @@ import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, type Theme, type UserSettings }
 
 interface SettingsContextValue {
   settings: UserSettings;
-  updateDisplayName: (displayName: string) => void;
-  updateTheme: (theme: Theme) => void;
-  resetSettings: () => void;
+  storageError: string;
+  updateDisplayName: (displayName: string) => boolean;
+  updateTheme: (theme: Theme) => boolean;
+  resetSettings: () => boolean;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -33,6 +34,7 @@ function readSavedSettings(): UserSettings {
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [storageError, setStorageError] = useState("");
 
   useEffect(() => {
     startTransition(() => setSettings(readSavedSettings()));
@@ -42,19 +44,25 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
 
-  function persist(next: UserSettings) {
+  function persist(next: UserSettings): boolean {
     setSettings(next);
     try {
       window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
-    } catch {}
+      setStorageError("");
+      return true;
+    } catch {
+      setStorageError("Preference changes are active for this session but could not be saved in this browser.");
+      return false;
+    }
   }
 
   const value = useMemo<SettingsContextValue>(() => ({
     settings,
+    storageError,
     updateDisplayName: (displayName) => persist({ ...settings, displayName }),
     updateTheme: (theme) => persist({ ...settings, theme }),
     resetSettings: () => persist(DEFAULT_SETTINGS),
-  }), [settings]);
+  }), [settings, storageError]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

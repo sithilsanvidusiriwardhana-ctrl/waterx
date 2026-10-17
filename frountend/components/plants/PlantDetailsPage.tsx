@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/layout/AppShell";
 import { usePlants } from "@/context/PlantsContext";
+import { apiErrorMessage, getPlant } from "@/lib/api";
 import { readingSourceLabel, statusClass } from "@/lib/plants";
 import type { Plant } from "@/lib/types";
 import type { PlantConfiguration } from "@/lib/plants";
@@ -59,7 +60,7 @@ function MoistureTrend({ plant }: { plant: Plant }) {
       <div className="detail-panel-heading"><div><h2 id="moisture-trend-title">Soil moisture monitoring</h2><p>Moisture readings and this plant’s configured range</p></div>
         <label className="filter-select"><span className="sr-only">Select moisture chart time range</span><select value={range} onChange={(event) => setRange(event.target.value as TimeRange)}><option value="24h">24 hours</option><option value="7d">7 days</option><option value="30d">30 days</option></select></label>
       </div>
-      <p className="chart-data-label">{plant.isDemoData ? "Demonstration history · sample data, not live sensor readings" : "Sensor history · timestamps shown in local time"}</p>
+      <p className="chart-data-label">{plant.readingSource === "simulation" ? "Stored simulation history · not live sensor readings" : "Stored sensor history · timestamps shown in local time"}</p>
       {chartData.length ? <div className="detail-chart">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 12, right: 14, left: -14, bottom: 3 }}>
@@ -84,7 +85,7 @@ function MoistureTrend({ plant }: { plant: Plant }) {
   );
 }
 
-function PlantSettings({ plant, onSave }: { plant: Plant; onSave: (updates: Partial<Plant>) => void }) {
+function PlantSettings({ plant, onSave }: { plant: Plant; onSave: (updates: Partial<Plant>) => Promise<void> }) {
   const [draft, setDraft] = useState<PlantConfiguration>(() => ({
     name: plant.name,
     species: plant.species,
@@ -99,6 +100,7 @@ function PlantSettings({ plant, onSave }: { plant: Plant; onSave: (updates: Part
   }));
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   function cancel() {
     setDraft({
@@ -123,16 +125,23 @@ function PlantSettings({ plant, onSave }: { plant: Plant; onSave: (updates: Part
     setSaved(false);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (draft.minMoisture >= draft.optimalMoisture || draft.optimalMoisture >= draft.maxMoisture) {
       setError("Moisture thresholds must be ordered: minimum < optimal < maximum.");
       return;
     }
     const configuration = { ...draft, category: draft.species, threshold: draft.minMoisture, nextWatering: draft.wateringSchedule.trim() || "Not scheduled" };
-    onSave(configuration);
-    setSaved(true);
-    setError("");
+    setSaving(true);
+    try {
+      await onSave(configuration);
+      setSaved(true);
+      setError("");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Plant settings could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -148,11 +157,12 @@ function PlantSettings({ plant, onSave }: { plant: Plant; onSave: (updates: Part
           <label className="form-field">Water per cycle (mL)<input type="number" min="1" max="5000" required value={draft.waterVolumeMl} onChange={(event) => update("waterVolumeMl", Number(event.target.value))} /></label>
           <label className="form-field">Daily watering limit<input type="number" min="1" max="24" required value={draft.maxCyclesPerDay} onChange={(event) => update("maxCyclesPerDay", Number(event.target.value))} /></label>
           <label className="form-field">Maximum pump runtime (sec)<input type="number" min="1" max="600" required value={draft.maxPumpRuntimeSeconds} onChange={(event) => update("maxPumpRuntimeSeconds", Number(event.target.value))} /></label>
-          <label className="form-field detail-settings-wide">Watering schedule<input maxLength={100} value={draft.wateringSchedule} onChange={(event) => update("wateringSchedule", event.target.value)} placeholder="Not scheduled" /></label>
+          <label className="form-field detail-settings-wide">Daily watering time<input type="time" value={draft.wateringSchedule} onChange={(event) => update("wateringSchedule", event.target.value)} /></label>
         </div>
+        <p className="form-note">The backend stores a daily schedule time only.</p>
         {error && <p className="settings-error" role="alert">{error}</p>}
         {saved && <p className="inline-success" role="status"><Check size={14} /> Plant settings saved.</p>}
-        <div className="settings-actions"><button className="button primary" type="submit">Save Changes</button><button className="button secondary" type="button" onClick={cancel}>Cancel</button></div>
+        <div className="settings-actions"><button className="button primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save Changes"}</button><button className="button secondary" type="button" onClick={cancel} disabled={saving}>Cancel</button></div>
       </form>
     </section>
   );
@@ -171,7 +181,7 @@ function GrowthMonitoring({ plant }: { plant: Plant }) {
       <div className="detail-panel-heading"><div><h2 id="growth-title">Plant growth monitoring</h2><p>Growth observations recorded for this plant</p></div></div>
       {growth && Object.values(growth).some((value) => value !== undefined)
         ? <>
-          <p className="chart-data-label">{plant.isDemoData ? "Demonstration data" : "Recorded plant data"}</p>
+          <p className="chart-data-label">{plant.isDemoData ? "Stored simulation data" : "Recorded plant data"}</p>
           <div className="growth-metrics">
             <div><Sprout size={18} /><span>Plant height</span><strong>{growth.heightCm === undefined ? "Unavailable" : `${growth.heightCm} cm`}</strong></div>
             <div><Leaf size={18} /><span>Leaf count</span><strong>{growth.leafCount ?? "Unavailable"}</strong></div>
@@ -182,7 +192,7 @@ function GrowthMonitoring({ plant }: { plant: Plant }) {
         : <div className="detail-empty"><Sprout size={23} /><strong>No growth data available</strong><span>Height, leaf count, biomass, and stress information have not been recorded for this plant.</span></div>}
       <div className="growth-trend-section">
         <h3>Plant height trend</h3>
-        <p className="chart-data-label">{plant.isDemoData ? "Demonstration growth data" : "Recorded growth measurements"}</p>
+        <p className="chart-data-label">{plant.isDemoData ? "Stored simulation growth data" : "Recorded growth measurements"}</p>
         {growthTrend.length ? <div className="growth-trend-chart">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={growthTrend} margin={{ top: 8, right: 12, left: -14, bottom: 3 }}>
@@ -200,52 +210,79 @@ function GrowthMonitoring({ plant }: { plant: Plant }) {
 }
 
 function PlantAIInsights({ plant }: { plant: Plant }) {
-  const currentStatus = plant.status;
-  const prediction = plant.moisture === null || currentStatus === "Sensor Error" || !plant.active ? [] : [
-    { time: "Now", moisture: plant.moisture },
-    { time: "+6h", moisture: Math.max(0, plant.moisture - 3) },
-    { time: "+12h", moisture: Math.max(0, plant.moisture - 6) },
-    { time: "+24h", moisture: Math.max(0, plant.moisture - 10) },
-  ];
-  const predictionText = plant.moisture === null
-    ? "A moisture prediction cannot be shown because no sensor reading is available."
-    : currentStatus === "Sensor Error"
-      ? "A prediction cannot be shown because the sensor reading is unavailable or stale."
-      : currentStatus === "Needs Water"
-        ? "The sample reading is below this plant’s minimum threshold. Check the sensor and plant conditions before taking action."
-        : `The sample trend is currently within this plant’s configured range. Monitor readings for changes.`;
+  const predictions = plant.predictions ?? [];
+  const predictionData = predictions.map((prediction) => ({
+    time: new Date(prediction.targetTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }),
+    predicted: prediction.predictedMoisture,
+    actual: prediction.actualMoisture,
+  }));
+  const latestPrediction = predictions.at(-1);
 
   return (
     <section className="panel detail-panel ai-insights" aria-labelledby="ai-insights-title">
-      <div className="detail-panel-heading"><div><h2 id="ai-insights-title">AI moisture outlook</h2><p>Demonstration predictions · not live model output</p></div><span className="demo-model-status">Demo model</span></div>
-      {prediction.length ? <div className="detail-chart ai-chart">
+      <div className="detail-panel-heading"><div><h2 id="ai-insights-title">Saved moisture predictions</h2><p>Persisted simulation forecasts · not live model output</p></div><span className="demo-model-status">{latestPrediction?.algorithm ?? "Not connected"}</span></div>
+      {predictionData.length ? <div className="detail-chart ai-chart">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={prediction} margin={{ top: 12, right: 12, left: -14, bottom: 3 }}>
+          <LineChart data={predictionData} margin={{ top: 12, right: 12, left: -14, bottom: 3 }}>
             <CartesianGrid stroke="#e8edf3" strokeDasharray="3 3" />
             <XAxis dataKey="time" tick={{ fill: "#75839a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dce4ed" }} />
             <YAxis domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} tick={{ fill: "#75839a", fontSize: 11 }} tickLine={false} axisLine={false} />
-            <Tooltip formatter={(value) => [`${value}%`, "Predicted moisture"]} />
-            <Line name="Predicted moisture" dataKey="moisture" type="monotone" stroke="#7655ca" strokeWidth={2.5} strokeDasharray="6 4" dot={{ r: 4 }} />
+            <Tooltip formatter={(value, name) => [`${value}%`, name]} />
+            <Line name="Predicted moisture" dataKey="predicted" type="monotone" stroke="#7655ca" strokeWidth={2.5} strokeDasharray="6 4" dot={{ r: 4 }} />
+            <Line name="Recorded actual" dataKey="actual" type="monotone" stroke="#18a56a" strokeWidth={2} dot={{ r: 3 }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
-      </div> : <div className="detail-empty compact-empty"><Activity size={22} /><strong>No prediction available</strong><span>Provide a valid, current sensor reading before generating an outlook.</span></div>}
-      <div className="ai-explanation"><strong>Recommendation explanation</strong><p>{predictionText}</p><p>Estimated time until watering: {currentStatus === "Needs Water" ? "Review now; no automatic action is proposed." : prediction.length ? "Not estimated by this demonstration model." : "Unavailable."}</p></div>
-      <p className="safety-note">Recommendations never initiate watering and cannot bypass sensor validation, tank-level checks, daily limits, or pump-runtime safety settings.</p>
+      </div> : <div className="detail-empty compact-empty"><Activity size={22} /><strong>No saved prediction is available</strong><span>Predictions are not generated by the dashboard. Run the backend simulator with the ai_assisted strategy to store forecast records.</span></div>}
+      {latestPrediction && <div className="ai-explanation"><strong>Latest stored forecast</strong><p>{latestPrediction.modelName} ({latestPrediction.algorithm}) predicted {latestPrediction.predictedMoisture}% at {readableDate(latestPrediction.targetTime)}.</p><p>Recorded actual: {latestPrediction.actualMoisture === null ? "Not yet available" : `${latestPrediction.actualMoisture}%`}</p></div>}
+      <p className="safety-note">Forecasts are informational only. No watering operation is exposed by the frontend; the simulator&apos;s safety checks remain in its backend engine.</p>
     </section>
   );
 }
 
 export function PlantDetailsPage({ plantId }: { plantId: string }) {
-  const { plants, isLoading, updatePlant, storageError } = usePlants();
-  const plant = plants.find((candidate) => candidate.id === plantId);
+  const { plants, isLoading, updatePlant, apiError, refreshPlants } = usePlants();
+  const [detailPlant, setDetailPlant] = useState<Plant | null>(null);
+  const [loadedPlantId, setLoadedPlantId] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [toast, setToast] = useState("");
 
-  if (isLoading) {
+  const refreshPlant = useCallback(async () => {
+    try {
+      setDetailPlant(await getPlant(plantId));
+      setDetailError("");
+    } catch (error) {
+      setDetailError(apiErrorMessage(error));
+    } finally {
+      setLoadedPlantId(plantId);
+    }
+  }, [plantId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPlant(plantId)
+      .then((plant) => {
+        if (!cancelled) {
+          setDetailPlant(plant);
+          setDetailError("");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setDetailError(apiErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadedPlantId(plantId);
+      });
+    return () => { cancelled = true; };
+  }, [plantId]);
+
+  const plant = detailPlant?.id === plantId ? detailPlant : plants.find((candidate) => candidate.id === plantId);
+
+  if (isLoading || loadedPlantId !== plantId) {
     return <AppShell showSearch={false}><div className="dashboard-content"><div className="plant-loading" role="status">Loading saved plant data…</div></div></AppShell>;
   }
 
   if (!plant) {
-    return <AppShell showSearch={false}><div className="dashboard-content"><section className="panel not-found-panel"><span className="placeholder-icon"><Leaf size={25} /></span><h1>Plant not found</h1><p>This plant ID is invalid or the plant has been removed.</p><Link className="button primary" href="/plants"><ArrowLeft size={15} />Back to My Plants</Link></section></div></AppShell>;
+    return <AppShell showSearch={false}><div className="dashboard-content"><section className="panel not-found-panel"><span className="placeholder-icon"><Leaf size={25} /></span><h1>{detailError ? "Plant details unavailable" : "Plant not found"}</h1><p>{detailError || "This plant ID is invalid or the plant has been removed."}</p>{detailError && <button type="button" className="button secondary" onClick={() => { void refreshPlant(); }}>Retry</button>}<Link className="button primary" href="/plants"><ArrowLeft size={15} />Back to My Plants</Link></section></div></AppShell>;
   }
 
   const status = plant.status;
@@ -255,7 +292,7 @@ export function PlantDetailsPage({ plantId }: { plantId: string }) {
     <AppShell showSearch={false}>
       <div className="dashboard-content plant-detail-page">
         <Link className="back-to-plants" href="/plants"><ArrowLeft size={16} />Back to My Plants</Link>
-        {storageError && <div className="storage-warning" role="alert">{storageError}</div>}
+        {apiError && <div className="storage-warning" role="alert"><span>{apiError}</span><button type="button" onClick={refreshPlants}>Retry</button></div>}
         <header className="plant-detail-header">
           <div className="plant-detail-photo">
             {plant.image ? <Image src={plant.image} alt={`${plant.name} plant`} width={220} height={220} unoptimized /> : <Leaf size={46} />}
@@ -277,7 +314,7 @@ export function PlantDetailsPage({ plantId }: { plantId: string }) {
             <div><Droplet size={18} /><span>Last watering</span><strong>{readableDate(plant.lastWateredAt)}</strong></div>
             <div><CalendarClock size={18} /><span>Next scheduled watering</span><strong>{plant.wateringSchedule || "Not configured"}</strong></div>
           </div>
-          {plant.isDemoData && <p className="sensor-note demo-reading-note">All sample sensor values and history for this plant are demonstration data, not live measurements.</p>}
+          {plant.readingSource === "simulation" && <p className="sensor-note demo-reading-note">Values shown are simulated database records, not live sensor measurements.</p>}
         </section>
 
         <MoistureTrend plant={plant} />
@@ -294,7 +331,7 @@ export function PlantDetailsPage({ plantId }: { plantId: string }) {
 
         <GrowthMonitoring plant={plant} />
         <PlantAIInsights plant={plant} />
-        <PlantSettings plant={plant} onSave={(updates) => { updatePlant(plant.id, updates); setToast("Plant settings saved."); }} />
+        <PlantSettings plant={plant} onSave={async (updates) => { await updatePlant(plant.id, updates); await refreshPlant(); setToast("Plant settings saved."); }} />
       </div>
       {toast && <div className="plant-toast" role="status" aria-live="polite"><span>{toast}</span><button type="button" className="icon-button" onClick={() => setToast("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </AppShell>

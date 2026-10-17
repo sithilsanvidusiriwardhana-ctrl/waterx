@@ -8,6 +8,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { AddPlantModal } from "@/components/plants/AddPlantModal";
 import { ModalFrame } from "@/components/shared/ModalFrame";
 import { usePlants } from "@/context/PlantsContext";
+import { apiErrorMessage } from "@/lib/api";
 import { statusClass } from "@/lib/plants";
 import type { Plant, PlantStatus } from "@/lib/types";
 
@@ -48,7 +49,7 @@ function PlantCard({ plant, onEdit, onConfirm }: {
         <div className="plant-schedule-line"><span>Next watering</span><strong>{plant.wateringSchedule || "Not scheduled"}</strong></div>
         {plant.readingSource === "unavailable" || plant.moisture === null
           ? <p className="sensor-note" role="status">No sensor reading is available for this plant.</p>
-          : plant.isDemoData && <p className="sensor-note demo-reading-note">Demonstration reading · not live sensor data</p>}
+          : plant.readingSource === "simulation" && <p className="sensor-note demo-reading-note">Simulation reading · not live sensor data</p>}
         <div className="plant-card-actions">
           <Link className="button primary" href={`/plants/${encodeURIComponent(plant.id)}`}>View Details</Link>
           <button type="button" className="button secondary" onClick={() => onEdit(plant)}>Edit</button>
@@ -61,13 +62,14 @@ function PlantCard({ plant, onEdit, onConfirm }: {
 }
 
 export function MyPlantsPage() {
-  const { plants, isLoading, addPlant, updatePlant, togglePlantActive, deletePlant, storageError, clearStorageError } = usePlants();
+  const { plants, isLoading, apiError, refreshPlants, addPlant, updatePlant, togglePlantActive, deletePlant, clearApiError } = usePlants();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All statuses");
   const [sort, setSort] = useState<SortMode>("name");
   const [editing, setEditing] = useState<Plant | undefined>();
   const [isAdding, setIsAdding] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmAction>(null);
+  const [confirmError, setConfirmError] = useState("");
   const [toast, setToast] = useState("");
 
   const filteredPlants = useMemo(() => {
@@ -91,36 +93,41 @@ export function MyPlantsPage() {
     });
   }, [plants, search, sort, status]);
 
-  const measured = plants.filter((plant) => plant.active && plant.moisture !== null);
+  const measured = plants.filter((plant) => plant.active && plant.moisture !== null && plant.status !== "Sensor Error");
   const averageMoisture = measured.length
     ? `${Math.round(measured.reduce((total, plant) => total + (plant.moisture ?? 0), 0) / measured.length)}%`
     : "—";
   const healthyCount = plants.filter((plant) => plant.active && plant.status === "Healthy").length;
   const attentionCount = plants.filter((plant) => plant.active && ["Needs Water", "Too Wet", "Sensor Error"].includes(plant.status)).length;
 
-  function savePlant(plant: Plant) {
+  async function savePlant(plant: Plant) {
     if (editing) {
-      updatePlant(plant.id, plant);
+      await updatePlant(plant.id, plant);
       setToast(`${plant.name} updated.`);
       setEditing(undefined);
     } else {
-      addPlant(plant);
+      await addPlant(plant);
       setToast(`${plant.name} added. Sensor readings will appear when available.`);
       setIsAdding(false);
     }
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!confirm) return;
     const { plant, action } = confirm;
-    if (action === "delete") {
-      deletePlant(plant.id);
-      setToast(`${plant.name} and its plant-specific demonstration history were deleted.`);
-    } else {
-      togglePlantActive(plant.id);
-      setToast(`${plant.name} ${plant.active ? "deactivated" : "reactivated"}.`);
+    try {
+      if (action === "delete") {
+        await deletePlant(plant.id);
+        setToast(`${plant.name} was deleted.`);
+      } else {
+        await togglePlantActive(plant.id);
+        setToast(`${plant.name} ${plant.active ? "deactivated" : "reactivated"}.`);
+      }
+      setConfirm(null);
+      setConfirmError("");
+    } catch (error) {
+      setConfirmError(apiErrorMessage(error));
     }
-    setConfirm(null);
   }
 
   if (isLoading) {
@@ -139,7 +146,7 @@ export function MyPlantsPage() {
           <button type="button" className="button primary add-plant-button" onClick={() => setIsAdding(true)}><Plus size={17} />Add Plant</button>
         </div>
 
-        {storageError && <div className="storage-warning" role="alert"><span>{storageError}</span><button type="button" onClick={clearStorageError} aria-label="Dismiss storage warning"><X size={16} /></button></div>}
+        {apiError && <div className="storage-warning" role="alert"><span>{apiError}</span><button type="button" onClick={refreshPlants}>Retry</button><button type="button" onClick={clearApiError} aria-label="Dismiss backend error"><X size={16} /></button></div>}
 
         <section className="summary-grid plant-summary-grid" aria-label="Plant summary">
           <article className="summary-card"><span className="summary-icon green"><Sprout size={20} /></span><div className="summary-content"><span className="summary-label">Total Plants</span><strong>{plants.length}</strong><small className="muted">{plants.filter((plant) => plant.active).length} active</small></div></article>
@@ -157,18 +164,19 @@ export function MyPlantsPage() {
             </div>
           </div>
           {filteredPlants.length
-            ? <div className="plant-library-grid">{filteredPlants.map((plant) => <PlantCard key={plant.id} plant={plant} onEdit={setEditing} onConfirm={(selected, action) => setConfirm({ plant: selected, action })} />)}</div>
-            : <div className="plant-library-empty"><Sprout size={28} /><strong>{plants.length ? "No plants match your filters" : "Your garden is ready to grow"}</strong><span>{plants.length ? "Try a different search or status." : "Add a plant to get started. New plants won't show readings until a sensor is connected."}</span></div>}
+            ? <div className="plant-library-grid">{filteredPlants.map((plant) => <PlantCard key={plant.id} plant={plant} onEdit={setEditing} onConfirm={(selected, action) => { setConfirmError(""); setConfirm({ plant: selected, action }); }} />)}</div>
+            : <div className="plant-library-empty"><Sprout size={28} /><strong>{plants.length ? "No plants match your filters" : apiError ? "Backend data is unavailable" : "Your garden is ready to grow"}</strong><span>{plants.length ? "Try a different search or status." : apiError ? "Reconnect to the backend to view and manage saved plants." : "Add a plant to get started. New plants won't show readings until a sensor is connected."}</span></div>}
         </section>
       </div>
 
       {(isAdding || editing) && <AddPlantModal plant={editing} onClose={() => { setIsAdding(false); setEditing(undefined); }} onSave={savePlant} />}
-      {confirm && <ModalFrame labelledBy="plant-confirm-title" onClose={() => setConfirm(null)}>
-        <div className="modal-heading"><div><span className="eyebrow">PLANT MANAGEMENT</span><h2 id="plant-confirm-title">{confirm.action === "delete" ? "Delete this plant?" : `${confirm.plant.active ? "Deactivate" : "Reactivate"} ${confirm.plant.name}?`}</h2></div><button type="button" className="icon-button" onClick={() => setConfirm(null)} aria-label="Close dialog"><X size={19} /></button></div>
+      {confirm && <ModalFrame labelledBy="plant-confirm-title" onClose={() => { setConfirm(null); setConfirmError(""); }}>
+        <div className="modal-heading"><div><span className="eyebrow">PLANT MANAGEMENT</span><h2 id="plant-confirm-title">{confirm.action === "delete" ? "Delete this plant?" : `${confirm.plant.active ? "Deactivate" : "Reactivate"} ${confirm.plant.name}?`}</h2></div><button type="button" className="icon-button" onClick={() => { setConfirm(null); setConfirmError(""); }} aria-label="Close dialog"><X size={19} /></button></div>
         <div className="dialog-content">{confirm.action === "delete"
-          ? <p>This permanently removes {confirm.plant.name}, its configuration, and this plant’s associated demonstration readings, growth data, and watering history from this browser. Other plants and dashboard data are not affected.</p>
+          ? <p>This permanently removes {confirm.plant.name} and its profile association. Plants with saved sensor, watering, growth, prediction, or alert records cannot be deleted; deactivate them instead to preserve their history.</p>
           : <p>{confirm.plant.active ? "This plant will be marked inactive and excluded from active health summaries." : "This plant will be included in active health summaries again."} Its configuration and history will be kept.</p>}</div>
-        <div className="modal-actions"><button type="button" className="button secondary" onClick={() => setConfirm(null)}>Cancel</button><button type="button" className={confirm.action === "delete" ? "button danger-button" : "button primary"} onClick={confirmAction}>{confirm.action === "delete" ? "Delete plant" : confirm.plant.active ? "Deactivate" : "Reactivate"}</button></div>
+        {confirmError && <p className="settings-error" role="alert">{confirmError}</p>}
+        <div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setConfirm(null); setConfirmError(""); }}>Cancel</button><button type="button" className={confirm.action === "delete" ? "button danger-button" : "button primary"} onClick={confirmAction}>{confirm.action === "delete" ? "Delete plant" : confirm.plant.active ? "Deactivate" : "Reactivate"}</button></div>
       </ModalFrame>}
       {toast && <div className="plant-toast" role="status" aria-live="polite"><span>{toast}</span><button type="button" className="icon-button" onClick={() => setToast("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </AppShell>

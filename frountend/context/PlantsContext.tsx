@@ -1,82 +1,104 @@
 "use client";
 
-import { createContext, startTransition, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { plants as demoPlants } from "@/lib/mock-data";
-import { PLANTS_STORAGE_KEY, readPlants, withCurrentStatus } from "@/lib/plants";
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  apiErrorMessage,
+  createPlant as createBackendPlant,
+  deletePlant as deleteBackendPlant,
+  getPlants,
+  updatePlant as updateBackendPlant,
+  type PlantInput,
+} from "@/lib/api";
+import { withCurrentStatus } from "@/lib/plants";
 import type { Plant } from "@/lib/types";
 
 interface PlantsContextValue {
   plants: Plant[];
   isLoading: boolean;
-  storageError: string;
-  addPlant: (plant: Plant) => void;
-  updatePlant: (id: string, updates: Partial<Plant>) => void;
-  togglePlantActive: (id: string) => void;
-  deletePlant: (id: string) => void;
-  clearStorageError: () => void;
+  apiError: string;
+  refreshPlants: () => Promise<void>;
+  addPlant: (plant: Plant) => Promise<void>;
+  updatePlant: (id: string, updates: Partial<Plant>) => Promise<void>;
+  togglePlantActive: (id: string) => Promise<void>;
+  deletePlant: (id: string) => Promise<void>;
+  clearApiError: () => void;
 }
 
 const PlantsContext = createContext<PlantsContextValue | null>(null);
 
-export function PlantsProvider({ children }: { children: ReactNode }) {
-  const [plants, setPlants] = useState<Plant[]>(demoPlants);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [storageError, setStorageError] = useState("");
+function plantInput(plant: Plant): PlantInput {
+  return {
+    name: plant.name,
+    species: plant.species,
+    minMoisture: plant.minMoisture,
+    optimalMoisture: plant.optimalMoisture,
+    maxMoisture: plant.maxMoisture,
+    waterVolumeMl: plant.waterVolumeMl,
+    maxCyclesPerDay: plant.maxCyclesPerDay,
+    maxPumpRuntimeSeconds: plant.maxPumpRuntimeSeconds,
+    wateringSchedule: plant.wateringSchedule,
+  };
+}
 
-  useEffect(() => {
-    let loadedPlants: Plant[] | null = null;
-    let loadError = "";
+export function PlantsProvider({ children }: { children: ReactNode }) {
+  const [plants, setPlants] = useState<Plant[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  const refreshPlants = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const stored = window.localStorage.getItem(PLANTS_STORAGE_KEY);
-      if (stored !== null) {
-        const parsed: unknown = JSON.parse(stored);
-        loadedPlants = readPlants(parsed);
-        if (!loadedPlants) loadError = "Saved plant data is invalid. The demonstration plants are shown instead.";
-      }
-    } catch {
-      loadError = "Plant data could not be read from local storage.";
+      const savedPlants = await getPlants();
+      startTransition(() => {
+        setPlants(savedPlants.map(withCurrentStatus));
+        setApiError("");
+      });
+    } catch (error) {
+      startTransition(() => setApiError(apiErrorMessage(error)));
+    } finally {
+      setIsLoading(false);
     }
-    startTransition(() => {
-      if (loadedPlants) setPlants(loadedPlants);
-      if (loadError) setStorageError(loadError);
-      setIsHydrated(true);
-    });
   }, []);
 
-  function save(nextPlants: Plant[]) {
-    const updated = nextPlants.map(withCurrentStatus);
-    setPlants(updated);
-    setStorageError("");
+  const mutate = useCallback(async (operation: () => Promise<unknown>) => {
+    setApiError("");
     try {
-      window.localStorage.setItem(PLANTS_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      setStorageError("Plant changes are visible for this session but could not be saved to local storage.");
+      await operation();
+    } catch (error) {
+      const message = apiErrorMessage(error);
+      setApiError(message);
+      throw error;
     }
-  }
+    await refreshPlants();
+  }, [refreshPlants]);
 
   useEffect(() => {
-    if (!isHydrated) return;
-    const refreshStatuses = () => {
+    void refreshPlants();
+    const timer = window.setInterval(() => {
       setPlants((current) => current.map(withCurrentStatus));
-    };
-    const timer = window.setInterval(refreshStatuses, 60_000);
+    }, 60_000);
     return () => window.clearInterval(timer);
-  }, [isHydrated]);
+  }, [refreshPlants]);
 
   const value = useMemo<PlantsContextValue>(() => ({
     plants,
-    isLoading: !isHydrated,
-    storageError,
-    addPlant: (plant) => save([...plants, plant]),
-    updatePlant: (id, updates) => save(plants.map((plant) =>
-      plant.id === id ? withCurrentStatus({ ...plant, ...updates }) : plant
-    )),
-    togglePlantActive: (id) => save(plants.map((plant) =>
-      plant.id === id ? { ...plant, active: !plant.active } : plant
-    )),
-    deletePlant: (id) => save(plants.filter((plant) => plant.id !== id)),
-    clearStorageError: () => setStorageError(""),
-  }), [isHydrated, plants, storageError]);
+    isLoading,
+    apiError,
+    refreshPlants,
+    addPlant: (plant) => mutate(() => createBackendPlant(plantInput(plant))),
+    updatePlant: (id, updates) => {
+      const current = plants.find((plant) => plant.id === id);
+      if (!current) return Promise.reject(new Error("Plant not found."));
+      return mutate(() => updateBackendPlant(id, plantInput({ ...current, ...updates })));
+    },
+    togglePlantActive: (id) => {
+      const plant = plants.find((item) => item.id === id);
+      if (!plant) return Promise.reject(new Error("Plant not found."));
+      return mutate(() => updateBackendPlant(id, { active: !plant.active }));
+    },
+    deletePlant: (id) => mutate(() => deleteBackendPlant(id)),
+    clearApiError: () => setApiError(""),
+  }), [apiError, isLoading, mutate, plants, refreshPlants]);
 
   return <PlantsContext.Provider value={value}>{children}</PlantsContext.Provider>;
 }

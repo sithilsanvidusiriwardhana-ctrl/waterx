@@ -6,7 +6,7 @@ import { Info, X } from "lucide-react";
 import { ModalFrame } from "@/components/shared/ModalFrame";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
-import { notifications } from "@/lib/mock-data";
+import { getDashboard, type DashboardAlert } from "@/lib/api";
 
 interface AppShellProps {
   children: ReactNode;
@@ -22,6 +22,9 @@ export function AppShell({ children, search, onSearch, showSearch = true, onNoti
   const [auxiliaryPage, setAuxiliaryPage] = useState("");
   const [internalSearch, setInternalSearch] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
+  const [alertError, setAlertError] = useState("");
+  const [alertsLoading, setAlertsLoading] = useState(false);
   const activeRoute = pathname === "/settings" ? "Settings" : pathname.startsWith("/plants") ? "My Plants" : "Dashboard";
   const activePage = auxiliaryPage || activeRoute;
 
@@ -35,6 +38,23 @@ export function AppShell({ children, search, onSearch, showSearch = true, onNoti
 
   const pageIsAuxiliary = Boolean(auxiliaryPage);
 
+  async function openNotifications() {
+    if (onNotifications) {
+      onNotifications();
+      return;
+    }
+    setShowNotifications(true);
+    setAlertsLoading(true);
+    setAlertError("");
+    try {
+      setAlerts((await getDashboard()).alerts);
+    } catch (error) {
+      setAlertError(error instanceof Error ? error.message : "Alerts could not be loaded.");
+    } finally {
+      setAlertsLoading(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar activePage={activePage} onNavigate={navigate} />
@@ -42,7 +62,7 @@ export function AppShell({ children, search, onSearch, showSearch = true, onNoti
         <Topbar
           search={search ?? internalSearch}
           onSearch={onSearch ?? setInternalSearch}
-          onNotifications={() => onNotifications ? onNotifications() : setShowNotifications(true)}
+          onNotifications={() => { void openNotifications(); }}
           showSearch={showSearch}
         />
         {pageIsAuxiliary ? (
@@ -58,19 +78,21 @@ export function AppShell({ children, search, onSearch, showSearch = true, onNoti
       {showNotifications && (
         <ModalFrame labelledBy="notifications-title" onClose={() => setShowNotifications(false)}>
           <div className="modal-heading">
-            <div><span className="eyebrow">WATERX DEMO</span><h2 id="notifications-title">All notifications</h2></div>
+            <div><span className="eyebrow">WATERX DATABASE</span><h2 id="notifications-title">Backend alerts</h2></div>
             <button className="icon-button" onClick={() => setShowNotifications(false)} aria-label="Close dialog"><X size={19} /></button>
           </div>
           <div className="dialog-list">
-            {notifications.map((notification) => (
-              <article className="notification-row" key={notification.id}>
-                <span className={`notice-icon ${notification.tone}`}><Info size={14} /></span>
-                <div className="notification-copy">
-                  <div className="row-title"><strong>{notification.title}</strong><time>{notification.time}</time></div>
-                  <p>{notification.description}</p>
-                </div>
-              </article>
-            ))}
+            {alertsLoading ? <p className="dialog-content" role="status">Loading saved alerts…</p>
+              : alertError ? <p className="settings-error" role="alert">{alertError}</p>
+                : alerts.length ? alerts.map((alert) => (
+                  <article className="notification-row" key={alert.id}>
+                    <span className={`notice-icon ${alert.severity === "critical" ? "danger" : alert.severity}`}><Info size={14} /></span>
+                    <div className="notification-copy">
+                      <div className="row-title"><strong>{alert.type.replaceAll("_", " ")}</strong><time>{new Date(alert.time).toLocaleString()}</time></div>
+                      <p>{alert.message}</p>
+                    </div>
+                  </article>
+                )) : <p className="dialog-content">No unresolved alerts are stored in the database.</p>}
           </div>
           <div className="modal-actions"><button className="button primary" onClick={() => setShowNotifications(false)}>Done</button></div>
         </ModalFrame>
