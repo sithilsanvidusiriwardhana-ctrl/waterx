@@ -28,6 +28,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { AddPlantModal } from "@/components/plants/AddPlantModal";
 import { AIPredictionChart, SoilMoistureChart, WaterTankChart } from "@/components/dashboard/Charts";
 import { ModalFrame } from "@/components/shared/ModalFrame";
+import { SettingsPage } from "@/components/settings/SettingsPage";
 import { dashboardMetrics, notifications, plants as initialPlants, wateringEvents } from "@/lib/mock-data";
 import type { NotificationItem, Plant } from "@/lib/types";
 
@@ -181,7 +182,7 @@ export function Dashboard({ activePage, onNavigate }: DashboardProps) {
       <Sidebar activePage={activePage} onNavigate={onNavigate} />
       <main className="main-column">
         <Topbar search={search} onSearch={setSearch} onNotifications={() => setDialog("notifications")} />
-        {activePage === "Dashboard" ? (
+        {activePage === "Settings" ? <SettingsPage /> : activePage === "Dashboard" ? (
           <div className="dashboard-content">
             <div className="page-heading"><div><p className="eyebrow">YOUR GARDEN AT A GLANCE</p><h1>Smart Plant Water Management System</h1><p className="page-subtitle">Healthy Plants <i /> Optimized Water <i /> Smarter Decisions</p></div><span className="demo-pill"><span /> DEMO DATA</span></div>
             <SummaryCards plants={plants} />
