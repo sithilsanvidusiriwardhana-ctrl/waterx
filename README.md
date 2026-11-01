@@ -72,6 +72,15 @@ the last seven days is calculated from stored event timestamps in the latest
 simulation run; no readings or measurements are invented when records are
 absent.
 
+### Machine-learning foundation
+
+The initial ML pipeline lives in [`ml/`](./ml/). It currently prepares
+simulation-only training examples from aligned sensor, weather and future
+ground-truth records. Model training, held-out evaluation and production
+inference are intentionally not implemented yet; see [`ml/README.md`](./ml/README.md)
+for the staged path. Existing AI-assisted simulation predictions remain
+physics-based heuristics and are not trained-model output.
+
 ### Settings
 
 Display name and theme are still stored in browser `localStorage`; the backend
