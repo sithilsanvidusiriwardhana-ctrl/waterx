@@ -8,7 +8,11 @@ from pathlib import Path
 
 from database.seed import seed_database
 from database.waterx_db import get_connection
-from ml import load_training_examples
+from ml import (
+    count_training_examples,
+    get_training_coverage_in_connection,
+    load_training_examples,
+)
 from simulator import SimulationConfig, run_simulation
 
 
@@ -32,6 +36,7 @@ class WaterXDatasetTests(unittest.TestCase):
         examples = load_training_examples(self.db_path, horizon_hours=2)
 
         self.assertTrue(examples)
+        self.assertEqual(count_training_examples(self.db_path, horizon_hours=2), len(examples))
         example = examples[0]
         self.assertEqual(example.run_id, self.run.run_id)
         self.assertEqual(example.horizon_hours, 2)
@@ -86,12 +91,125 @@ class WaterXDatasetTests(unittest.TestCase):
             with self.subTest(horizon=horizon):
                 with self.assertRaises(ValueError):
                     load_training_examples(self.db_path, horizon_hours=horizon)
+                with self.assertRaises(ValueError):
+                    count_training_examples(self.db_path, horizon_hours=horizon)
 
     def test_missing_future_rows_produce_no_examples(self) -> None:
         self.assertEqual(
             load_training_examples(self.db_path, horizon_hours=1000),
             [],
         )
+
+    def test_new_plant_profile_is_used_in_training_features(self) -> None:
+        profile = {
+            "name": "Custom ML basil",
+            "min_moisture": 22.0,
+            "max_moisture": 68.0,
+            "optimal_moisture": 44.0,
+            "water_per_cycle_ml": 275.0,
+            "max_cycles_per_day": 4,
+            "max_pump_seconds": 18,
+            "schedule_time": "07:30",
+            "uptake_rate": 0.8,
+        }
+        with closing(get_connection(self.db_path)) as connection, connection:
+            profile_cursor = connection.execute(
+                """
+                INSERT INTO plant_profiles (
+                    name, min_moisture, max_moisture, optimal_moisture,
+                    water_per_cycle_ml, max_cycles_per_day, max_pump_seconds,
+                    schedule_time, uptake_rate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    profile["name"],
+                    profile["min_moisture"],
+                    profile["max_moisture"],
+                    profile["optimal_moisture"],
+                    profile["water_per_cycle_ml"],
+                    profile["max_cycles_per_day"],
+                    profile["max_pump_seconds"],
+                    profile["schedule_time"],
+                    profile["uptake_rate"],
+                ),
+            )
+            plant_id = connection.execute(
+                """
+                INSERT INTO plants (profile_id, name, planted_at, active)
+                VALUES (?, ?, ?, 1)
+                """,
+                (profile_cursor.lastrowid, "Custom profile plant", "2026-10-01"),
+            ).lastrowid
+
+        run_simulation(
+            SimulationConfig(
+                start_time=datetime(2026, 10, 2, tzinfo=timezone.utc),
+                hours=12,
+                random_seed=29,
+                sensor_fault_probability=0,
+            ),
+            self.db_path,
+        )
+        with closing(get_connection(self.db_path)) as connection, connection:
+            connection.execute(
+                """
+                UPDATE plant_profiles
+                SET name = ?, min_moisture = ?, optimal_moisture = ?,
+                    max_moisture = ?, water_per_cycle_ml = ?,
+                    max_cycles_per_day = ?, max_pump_seconds = ?,
+                    schedule_time = ?, uptake_rate = ?
+                WHERE name = ?
+                """,
+                (
+                    "Renamed after simulation",
+                    30,
+                    50,
+                    75,
+                    400,
+                    2,
+                    20,
+                    "08:00",
+                    1.2,
+                    profile["name"],
+                ),
+            )
+        examples = [
+            example
+            for example in load_training_examples(self.db_path, horizon_hours=2)
+            if example.plant_id == plant_id
+        ]
+
+        self.assertTrue(examples)
+        example = examples[0]
+        self.assertEqual(example.species, profile["name"])
+        self.assertEqual(example.features.min_moisture, profile["min_moisture"])
+        self.assertEqual(example.features.optimal_moisture, profile["optimal_moisture"])
+        self.assertEqual(example.features.max_moisture, profile["max_moisture"])
+        self.assertEqual(example.features.water_per_cycle_ml, profile["water_per_cycle_ml"])
+        self.assertEqual(example.features.max_cycles_per_day, profile["max_cycles_per_day"])
+        self.assertEqual(example.features.max_pump_seconds, profile["max_pump_seconds"])
+        self.assertEqual(example.features.uptake_rate, profile["uptake_rate"])
+        self.assertAlmostEqual(
+            example.features.watering_schedule_sin,
+            0.9238795325,
+            places=8,
+        )
+        self.assertAlmostEqual(
+            example.features.watering_schedule_cos,
+            -0.3826834324,
+            places=8,
+        )
+        self.assertEqual(example.features.has_watering_schedule, 1.0)
+
+        with closing(get_connection(self.db_path)) as connection:
+            coverage = get_training_coverage_in_connection(
+                connection,
+                horizon_hours=2,
+            )
+        plant_coverage = next(item for item in coverage if item.plant_id == plant_id)
+        self.assertEqual(plant_coverage.plant_name, "Custom profile plant")
+        self.assertEqual(plant_coverage.species, profile["name"])
+        self.assertEqual(plant_coverage.example_count, len(examples))
 
 
 if __name__ == "__main__":

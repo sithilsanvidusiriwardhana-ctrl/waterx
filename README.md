@@ -76,7 +76,10 @@ absent.
 
 The initial ML pipeline lives in [`ml/`](./ml/). It currently prepares
 simulation-only training examples from aligned sensor, weather and future
-ground-truth records. Model training, held-out evaluation and production
+ground-truth records, including each simulation's snapshot of the plant's
+moisture thresholds, watering limits and schedule. Newly added plants appear
+in dataset coverage after creation and contribute examples once they have
+simulation history. Model training, held-out evaluation and production
 inference are intentionally not implemented yet; see [`ml/README.md`](./ml/README.md)
 for the staged path. Existing AI-assisted simulation predictions remain
 physics-based heuristics and are not trained-model output.

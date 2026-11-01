@@ -94,6 +94,33 @@ class WaterXApiTests(unittest.TestCase):
         self.assertEqual(dashboard["events"], [])
         self.assertEqual(dashboard["alerts"], [])
         self.assertIsNone(dashboard["predictionMae"])
+        self.assertEqual(
+            dashboard["mlPipeline"],
+            {
+                "trainingExampleCount": 0,
+                "horizonHours": 6,
+                "features": [
+                    "moisture_pct",
+                    "temperature_c",
+                    "humidity_pct",
+                    "sunlight",
+                    "rain_mm",
+                    "uptake_rate",
+                    "min_moisture",
+                    "optimal_moisture",
+                    "max_moisture",
+                    "water_per_cycle_ml",
+                    "max_cycles_per_day",
+                    "max_pump_seconds",
+                    "watering_schedule_sin",
+                    "watering_schedule_cos",
+                    "has_watering_schedule",
+                ],
+                "target": "future simulated soil moisture",
+                "modelTrained": False,
+                "trainingExamplesByPlant": [],
+            },
+        )
 
     def test_dashboard_reads_saved_simulation_records(self) -> None:
         seed_database(self.database_path)

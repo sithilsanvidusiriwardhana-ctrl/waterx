@@ -60,6 +60,22 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS simulation_plant_profiles (
+    run_id INTEGER NOT NULL
+        REFERENCES simulation_runs(run_id) ON DELETE CASCADE,
+    plant_id INTEGER NOT NULL REFERENCES plants(plant_id),
+    profile_name TEXT NOT NULL,
+    min_moisture REAL NOT NULL,
+    optimal_moisture REAL NOT NULL,
+    max_moisture REAL NOT NULL,
+    water_per_cycle_ml REAL NOT NULL,
+    max_cycles_per_day INTEGER NOT NULL,
+    max_pump_seconds INTEGER NOT NULL,
+    schedule_time TEXT,
+    uptake_rate REAL NOT NULL,
+    PRIMARY KEY (run_id, plant_id)
+);
+
 CREATE TABLE IF NOT EXISTS weather (
     weather_id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id INTEGER NOT NULL

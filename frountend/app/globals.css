@@ -146,6 +146,49 @@ button { cursor: pointer; }
 .uncertainty-key { color: #8b96a7 !important; }
 .chart-disclaimer { margin: 7px -10px -10px; padding: 6px; text-align: center; color: #6f7f97; background: #f6f9fd; border-top: 1px solid #edf1f6; font-size: 8px; }
 
+.ml-page { display: flex; flex-direction: column; gap: 12px; }
+.ml-page-heading { margin-bottom: 0; }
+.ml-refresh { display: inline-flex; align-items: center; gap: 7px; }
+.ml-refresh:disabled { cursor: wait; opacity: .7; }
+.ml-spinning { animation: ml-spin .9s linear infinite; }
+@keyframes ml-spin { to { transform: rotate(360deg); } }
+.ml-notice { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border: 1px solid #e8d5a5; border-radius: 7px; color: #765a19; background: #fff9e9; font-size: 11px; line-height: 1.5; }
+.ml-notice svg { flex: 0 0 auto; margin-top: 1px; }
+.ml-notice p { margin: 0; }
+.ml-summary-grid { margin-bottom: 0; }
+.ml-workflow-panel { padding: 12px; }
+.ml-model-status { flex: 0 0 auto; padding: 5px 8px; border-radius: 12px; color: #825a17; background: #fff3d8; font-size: 9px; font-weight: 600; }
+.ml-model-status.ready { color: #126a3e; background: #e4f7eb; }
+.ml-workflow-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 11px 0; padding: 0; list-style: none; }
+.ml-workflow-steps li { min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 10px; border: 1px solid #e8edf3; border-radius: 7px; background: #fbfcfe; }
+.ml-workflow-steps li > span { width: 22px; height: 22px; display: grid; place-items: center; flex: 0 0 22px; border-radius: 50%; color: #286fcf; background: #e8f1ff; font-size: 10px; font-weight: 700; }
+.ml-workflow-steps li > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ml-workflow-steps strong { color: #334967; font-size: 10px; }
+.ml-workflow-steps small { color: #77869a; font-size: 9px; line-height: 1.4; }
+.ml-feature-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ml-feature-list > strong { margin-right: 3px; color: #697991; font-size: 9px; }
+.ml-feature-list > span { padding: 4px 7px; border-radius: 10px; color: #526782; background: #f0f4f9; font-size: 8px; }
+.ml-plant-coverage { margin-top: 12px; padding-top: 10px; border-top: 1px solid #edf1f5; }
+.ml-coverage-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; margin-bottom: 8px; }
+.ml-coverage-heading strong { color: #465a74; font-size: 9px; }
+.ml-coverage-heading > span { color: #8592a4; font-size: 8px; }
+.ml-coverage-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 7px; }
+.ml-coverage-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 8px; border: 1px solid #e8edf3; border-radius: 6px; background: #fbfcfe; }
+.ml-coverage-card > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ml-coverage-card strong { overflow: hidden; color: #334967; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.ml-coverage-card small { overflow: hidden; color: #77869a; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.ml-coverage-card > span { flex: 0 0 auto; color: #526782; font-size: 8px; }
+.ml-workflow-note { margin: 10px 0 0; color: #77869a; font-size: 9px; line-height: 1.5; }
+.ml-history-panel { min-width: 0; padding: 12px; }
+.ml-history-heading { align-items: center; padding-bottom: 10px; }
+.ml-history-heading h2 { margin: 0; color: #1d3454; font-size: 13px; }
+.ml-table-scroll { width: 100%; overflow-x: auto; }
+.ml-prediction-table { width: 100%; border-collapse: collapse; text-align: left; }
+.ml-prediction-table th, .ml-prediction-table td { padding: 10px 9px; border-top: 1px solid #edf1f5; font-size: 10px; white-space: nowrap; }
+.ml-prediction-table th { color: #697991; font-size: 9px; font-weight: 600; }
+.ml-prediction-table td { color: #40536d; }
+.ml-state { margin: 0; padding: 20px 10px; color: #77869a; text-align: center; font-size: 11px; }
+
 .right-column { gap: 11px; }
 .side-panel { padding: 11px 11px 5px; }
 .panel-heading.compact { min-height: 25px; align-items: center; }
@@ -650,6 +693,26 @@ button { cursor: pointer; }
 :root[data-theme="dark"] .event-outcome.failed { color: #f3a5a5; background: #4b2828; }
 :root[data-theme="dark"] .inline-success { color: #a1e7b8; }
 :root[data-theme="dark"] .plant-loading { color: #aab8c8; }
+:root[data-theme="dark"] .ml-notice { color: #e9d38d; border-color: #675b3a; background: #312d20; }
+:root[data-theme="dark"] .ml-history-heading h2 { color: #e5edf5; }
+:root[data-theme="dark"] .ml-model-status { color: #e9d38d; background: #493719; }
+:root[data-theme="dark"] .ml-model-status.ready { color: #a1e7b8; background: #183d2b; }
+:root[data-theme="dark"] .ml-workflow-steps li { border-color: #344352; background: #202e3b; }
+:root[data-theme="dark"] .ml-workflow-steps strong { color: #d7e1ed; }
+:root[data-theme="dark"] .ml-workflow-steps small,
+:root[data-theme="dark"] .ml-workflow-note,
+:root[data-theme="dark"] .ml-feature-list > strong { color: #aab8c8; }
+:root[data-theme="dark"] .ml-feature-list > span { color: #c4d0dd; background: #293947; }
+:root[data-theme="dark"] .ml-plant-coverage { border-color: #344352; }
+:root[data-theme="dark"] .ml-coverage-heading strong,
+:root[data-theme="dark"] .ml-coverage-card strong,
+:root[data-theme="dark"] .ml-coverage-card > span { color: #d7e1ed; }
+:root[data-theme="dark"] .ml-coverage-heading > span,
+:root[data-theme="dark"] .ml-coverage-card small { color: #aab8c8; }
+:root[data-theme="dark"] .ml-coverage-card { border-color: #344352; background: #202e3b; }
+:root[data-theme="dark"] .ml-prediction-table th,
+:root[data-theme="dark"] .ml-prediction-table td { color: #bac8d8; border-color: #344352; }
+:root[data-theme="dark"] .ml-state { color: #aab8c8; }
 
 @media (max-width: 1100px) {
   .plant-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -659,6 +722,8 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 720px) {
+  .ml-workflow-steps { grid-template-columns: 1fr; }
+  .ml-history-heading { align-items: flex-start; flex-direction: column; }
   .plant-detail-header { align-items: flex-start; flex-wrap: wrap; }
   .plant-reading-card { flex: 1 1 100%; }
   .overview-metrics, .growth-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

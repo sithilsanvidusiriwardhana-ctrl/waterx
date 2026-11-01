@@ -164,6 +164,32 @@ def run_simulation(
         )
         run_id = cursor.lastrowid
 
+        connection.executemany(
+            """
+            INSERT INTO simulation_plant_profiles (
+                run_id, plant_id, profile_name, min_moisture, optimal_moisture,
+                max_moisture, water_per_cycle_ml, max_cycles_per_day,
+                max_pump_seconds, schedule_time, uptake_rate
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    run_id,
+                    plant["plant_id"],
+                    plant["profile_name"],
+                    plant["min_moisture"],
+                    plant["optimal_moisture"],
+                    plant["max_moisture"],
+                    plant["water_per_cycle_ml"],
+                    plant["max_cycles_per_day"],
+                    plant["max_pump_seconds"],
+                    plant["schedule_time"],
+                    plant["uptake_rate"],
+                )
+                for plant in plants
+            ],
+        )
+
         moisture = {plant["plant_id"]: float(plant["optimal_moisture"]) for plant in plants}
         last_valid_sensor = dict(moisture)
         growth = {

@@ -33,6 +33,7 @@ class WaterXDatabaseTests(unittest.TestCase):
                 "plant_profiles",
                 "plants",
                 "simulation_runs",
+                "simulation_plant_profiles",
                 "sensor_readings",
                 "watering_events",
                 "daily_water_usage",

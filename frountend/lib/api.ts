@@ -47,6 +47,19 @@ export interface DashboardSnapshot {
   predictions: DashboardPrediction[];
   predictionMae: number | null;
   predictionCount: number;
+  mlPipeline: {
+    trainingExampleCount: number;
+    horizonHours: number;
+    features: string[];
+    target: string;
+    modelTrained: boolean;
+    trainingExamplesByPlant: Array<{
+      plantId: string;
+      plantName: string;
+      species: string;
+      exampleCount: number;
+    }>;
+  };
   latestSimulation: { strategy: string; createdAt: string } | null;
 }
 

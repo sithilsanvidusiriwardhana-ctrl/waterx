@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Info, X } from "lucide-react";
 import { ModalFrame } from "@/components/shared/ModalFrame";
+import { AIPredictionsPage } from "@/components/dashboard/AIPredictionsPage";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { getDashboard, type DashboardAlert } from "@/lib/api";
@@ -66,13 +67,15 @@ export function AppShell({ children, search, onSearch, showSearch = true, onNoti
           showSearch={showSearch}
         />
         {pageIsAuxiliary ? (
-          <div className="placeholder-page">
-            <span className="placeholder-icon"><Info size={25} /></span>
-            <p className="eyebrow">WATERX WORKSPACE</p>
-            <h1>{auxiliaryPage}</h1>
-            <p>This section is not implemented in the frontend demo yet.</p>
-            <button className="button primary" onClick={() => navigate("Dashboard")}>Back to Dashboard</button>
-          </div>
+          auxiliaryPage === "AI Predictions" ? <AIPredictionsPage /> : (
+            <div className="placeholder-page">
+              <span className="placeholder-icon"><Info size={25} /></span>
+              <p className="eyebrow">WATERX WORKSPACE</p>
+              <h1>{auxiliaryPage}</h1>
+              <p>This section is not implemented in the frontend demo yet.</p>
+              <button className="button primary" onClick={() => navigate("Dashboard")}>Back to Dashboard</button>
+            </div>
+          )
         ) : children}
       </main>
       {showNotifications && (

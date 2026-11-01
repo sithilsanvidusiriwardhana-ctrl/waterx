@@ -13,10 +13,29 @@ from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
 from database.waterx_db import DATABASE_PATH, get_connection, initialize_database
+from ml import count_training_examples_in_connection, get_training_coverage_in_connection
 
 
 _MAX_REQUEST_BYTES = 1_048_576
 _DEFAULT_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
+_ML_FORECAST_HORIZON_HOURS = 6
+_ML_FEATURES = [
+    "moisture_pct",
+    "temperature_c",
+    "humidity_pct",
+    "sunlight",
+    "rain_mm",
+    "uptake_rate",
+    "min_moisture",
+    "optimal_moisture",
+    "max_moisture",
+    "water_per_cycle_ml",
+    "max_cycles_per_day",
+    "max_pump_seconds",
+    "watering_schedule_sin",
+    "watering_schedule_cos",
+    "has_watering_schedule",
+]
 _PROFILE_FIELDS = {
     "minMoisture": "min_moisture",
     "optimalMoisture": "optimal_moisture",
@@ -477,6 +496,14 @@ def _dashboard_response(connection: sqlite3.Connection) -> dict[str, Any]:
         for row in predictions
         if row["actual_moisture"] is not None
     ]
+    training_example_count = count_training_examples_in_connection(
+        connection,
+        horizon_hours=_ML_FORECAST_HORIZON_HOURS,
+    )
+    training_coverage = get_training_coverage_in_connection(
+        connection,
+        horizon_hours=_ML_FORECAST_HORIZON_HOURS,
+    )
     return {
         "plants": plants,
         "tank": tank,
@@ -525,6 +552,22 @@ def _dashboard_response(connection: sqlite3.Connection) -> dict[str, Any]:
         ],
         "predictionMae": sum(evaluated) / len(evaluated) if evaluated else None,
         "predictionCount": len(predictions),
+        "mlPipeline": {
+            "trainingExampleCount": training_example_count,
+            "horizonHours": _ML_FORECAST_HORIZON_HOURS,
+            "features": _ML_FEATURES,
+            "target": "future simulated soil moisture",
+            "modelTrained": False,
+            "trainingExamplesByPlant": [
+                {
+                    "plantId": str(plant.plant_id),
+                    "plantName": plant.plant_name,
+                    "species": plant.species,
+                    "exampleCount": plant.example_count,
+                }
+                for plant in training_coverage
+            ],
+        },
         "latestSimulation": (
             {
                 "strategy": latest_run["strategy"],
